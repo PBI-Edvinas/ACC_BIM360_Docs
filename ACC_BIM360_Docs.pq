@@ -591,7 +591,19 @@ ACC_BIM360_Docs.OpenWebLink = (optional link as nullable text) =>
         fileId = Text.Replace(Text.BetweenDelimiters(link, "=", "&", 1, 0), "%3A", ":"),
         output = ACC_BIM360_Docs.FileDetails("Tip", projectId, fileId, null, null)
     in
-        output; 
+        output;
+
+// Define the TestConnection function
+TestConnection = (dataSourcePath) =>
+    let
+        // Construct a simple URL to test the connection
+        url = url_hubs,
+        // Attempt to fetch data from the API
+        response = try Web.Contents(url) otherwise null,
+        // Check if the response is not null
+        isConnected = response <> null
+    in
+        isConnected;
 
 // Data Source Kind description
 ACC_BIM360_Docs = [

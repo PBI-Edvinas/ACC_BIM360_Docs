@@ -22,49 +22,158 @@ url_hubs = "https://developer.api.autodesk.com/project/v1/hubs";
 [DataSource.Kind="ACC_BIM360_Docs", Publish="ACC_BIM360_Docs.Publish"]
 shared ACC_BIM360_Docs.Contents = (optional actionType as nullable text, optional variableOne as nullable text, optional variableTwo as nullable text, optional variableThree as nullable text, optional variableFour as nullable text, optional variableFive as nullable text) =>
     let
+        // Ensures Hub/Project IDs have "b." prefix
+        b_Prefix = (id as nullable text) as nullable text =>
+            if id = null then null
+            else if Text.StartsWith(Text.Trim(id), "b.") then Text.Trim(id)
+            else "b." & Text.Trim(id),
+
+        // Normalize action type (case-insensitive matching)
+        normalisedAction = if actionType = null then null else Text.Lower(Text.Trim(actionType)),
+        
+        // Trim all input variables
+        v1 = if variableOne = null then null else Text.Trim(variableOne),
+        v2 = if variableTwo = null then null else Text.Trim(variableTwo),
+        v3 = if variableThree = null then null else Text.Trim(variableThree),
+        v4 = if variableFour = null then null else Text.Trim(variableFour),
+        v5 = if variableFive = null then null else Text.Trim(variableFive),
+
         output = 
             if 
-                actionType = "GetProjects" 
+                normalisedAction = "getprojects" 
             then 
-                ACC_BIM360_Docs.Projects(variableOne)
+                let 
+                    hubId = b_Prefix(v1),
+                    validation = ACC_BIM360_Docs.ValidateRequired({hubId}, {"Hub ID"})
+                in
+                   if validation <> "" then error validation
+                   else ACC_BIM360_Docs.Projects(hubId)
             else if 
-                actionType = "GetTopFolders"
+                normalisedAction = "gettopfolders"
             then 
-                ACC_BIM360_Docs.Folders(variableOne, variableTwo)
+                let 
+                    hubId = b_Prefix(v1),
+                    projectId = b_Prefix(v2),
+                    validation = ACC_BIM360_Docs.ValidateRequired({hubId, projectId}, {"Hub ID", "Project ID"})
+                in
+                   if validation <> "" then error validation
+                   else ACC_BIM360_Docs.Folders(hubId, projectId)
             else if 
-                actionType = "GetFolders"
+                normalisedAction = "getfolders"
             then 
-                ACC_BIM360_Docs.ChildFolders(variableOne, variableTwo)
+                let
+                    projectId = b_Prefix(v1),
+                    validation = ACC_BIM360_Docs.ValidateRequired({projectId, v2}, {"Project ID", "Folder ID"})
+                in
+                    if validation <> "" then error validation
+                    else ACC_BIM360_Docs.ChildFolders(projectId, v2)
             else if
                 // "GetExcelFiles" is the new name; "GetFiles" kept for backward compatibility
-                actionType = "GetFiles" or actionType = "GetExcelFiles"
+                normalisedAction = "getfiles" or normalisedAction = "getexcelfiles"
             then
-                ACC_BIM360_Docs.Files(variableOne, variableTwo)
+                let
+                    projectId = b_Prefix(v1),
+                    validation = ACC_BIM360_Docs.ValidateRequired({projectId, v2}, {"Project ID", "Folder ID"})
+                in
+                    if validation <> "" then error validation
+                    else ACC_BIM360_Docs.Files(projectId, v2)
             else if
-                actionType = "GetAllFiles"
+                normalisedAction = "getallfiles"
             then
-                ACC_BIM360_Docs.AllFiles(variableOne, variableTwo)
+                let
+                    projectId = b_Prefix(v1),
+                    validation = ACC_BIM360_Docs.ValidateRequired({projectId, v2}, {"Project ID", "Folder ID"})
+                in
+                    if validation <> "" then error validation
+                    else ACC_BIM360_Docs.AllFiles(projectId, v2)
             else if
-                actionType = "GetFileDetails"
+                normalisedAction = "getfiledetails"
             then
-                ACC_BIM360_Docs.FileDetails(variableOne, variableTwo, variableThree, variableFour, variableFive)
+                let
+                    methodType = v1,
+                    projectId = b_Prefix(v2),
+                    itemId = v3,
+                    url = v4,
+                    version = v5,
+                    validation = 
+                        if methodType = null or methodType = "" then 
+                            "Missing required parameter: Method Type (Tip, Version, or URL)"
+                        else if Text.Lower(methodType) = "tip" and (projectId = null or itemId = null) then 
+                            "Missing required parameter(s) for Tip method: Project ID, Item ID"
+                        else if Text.Lower(methodType) = "version" and (projectId = null or itemId = null or version = null) then 
+                            "Missing required parameter(s) for Version method: Project ID, Item ID, Version Number"
+                        else if Text.Lower(methodType) = "url" and url = null then 
+                            "Missing required parameter for URL method: URL"
+                        else ""
+                in
+                    if validation <> "" then error validation
+                    else ACC_BIM360_Docs.FileDetails(methodType, projectId, itemId, url, version)
             else if
-                actionType = "GetFileVersions"
+                normalisedAction = "getfileversions"
             then
-                ACC_BIM360_Docs.FileVersionHistory(variableOne, variableTwo)
+                let
+                    projectId = b_Prefix(v1),
+                    itemId = v2,
+                    validation = ACC_BIM360_Docs.ValidateRequired({projectId, itemId}, {"Project ID", "Item ID"})
+                in
+                    if validation <> "" then error validation
+                    else ACC_BIM360_Docs.FileVersionHistory(projectId, itemId)
             else if
-                actionType = "DownloadFile"
+                normalisedAction = "downloadfile"
             then
-                ACC_BIM360_Docs.FileContents(variableOne, variableTwo, variableThree)
+                let
+                    bucketKey = v1,
+                    objectId = v2,
+                    fileType = v3,
+                    validation = ACC_BIM360_Docs.ValidateRequired({bucketKey, objectId}, {"Bucket Key", "Object ID"})
+                in
+                    if validation <> "" then error validation
+                    else ACC_BIM360_Docs.FileContents(bucketKey, objectId, fileType)
             else if
-                actionType = "SearchFile"
+                normalisedAction = "searchfile"
             then
-                ACC_BIM360_Docs.SearchFile(variableOne, variableTwo, variableThree, variableFour)
+                let
+                    projectId = b_Prefix(v1),
+                    folderId = v2,
+                    filter = v3,
+                    returnStyle = v4,
+                    validation = ACC_BIM360_Docs.ValidateRequired({projectId, folderId}, {"Project ID", "Folder ID"})
+                in
+                    if validation <> "" then error validation
+                    else ACC_BIM360_Docs.SearchFile(projectId, folderId, filter, returnStyle)
             else if 
-                actionType = "OpenWebLink"
+                normalisedAction = "openweblink"
             then
-                ACC_BIM360_Docs.OpenWebLink(variableOne)
+                let
+                    webLink = v1,
+                    validation = ACC_BIM360_Docs.ValidateRequired({webLink}, {"Web Link URL"})
+                in
+                    if validation <> "" then error validation
+                    else ACC_BIM360_Docs.OpenWebLink(webLink)
+            else if
+                normalisedAction = "help"
+            then
+                // Return a help table with action documentation
+                #table(
+                    {"Action", "Description", "Var1", "Var2", "Var3", "Var4", "Var5"},
+                    {
+                        {"(none)", "Returns all Hubs", "-", "-", "-", "-", "-"},
+                        {"GetProjects", "List projects in a hub", "Hub ID", "-", "-", "-", "-"},
+                        {"GetTopFolders", "Top-level folders in a project", "Hub ID", "Project ID", "-", "-", "-"},
+                        {"GetFolders", "Child folders and Excel files", "Project ID", "Folder ID", "-", "-", "-"},
+                        {"GetFiles", "Excel/CSV files in folder (recursive)", "Project ID", "Folder ID", "-", "-", "-"},
+                        {"GetExcelFiles", "Same as GetFiles", "Project ID", "Folder ID", "-", "-", "-"},
+                        {"GetAllFiles", "All file types in folder (recursive)", "Project ID", "Folder ID", "-", "-", "-"},
+                        {"GetFileDetails", "File metadata", "Method*", "Project ID", "Item ID", "URL", "Version"},
+                        {"GetFileVersions", "Version history", "Project ID", "Item ID", "-", "-", "-"},
+                        {"DownloadFile", "Download file contents", "Bucket Key", "Object ID", "File Type", "-", "-"},
+                        {"SearchFile", "Search with filters", "Project ID", "Folder ID", "Filter", "Return Style", "-"},
+                        {"OpenWebLink", "Parse ACC web link", "ACC URL", "-", "-", "-", "-"},
+                        {"Help", "Show this table", "-", "-", "-", "-", "-"}
+                    }
+                )
             else
+                // Default: return Hubs navigation
                 ACC_BIM360_Docs.Hubs()
     in
         output;
@@ -592,6 +701,19 @@ ACC_BIM360_Docs.OpenWebLink = (optional link as nullable text) =>
         output = ACC_BIM360_Docs.FileDetails("Tip", projectId, fileId, null, null)
     in
         output;
+
+// Validate required parameters function
+ACC_BIM360_Docs.ValidateRequired = (params as list, paramNames as list) as text =>
+            let
+                missing = List.Transform(
+                    List.Positions(List.Transform(params, each _ = null or _ = "")),
+                    each paramNames{_}
+                ),
+                missingFiltered = List.Select(missing, each _ <> null)
+            in
+                if List.Count(missingFiltered) > 0 
+                then "Missing required parameter(s): " & Text.Combine(missingFiltered, ", ")
+                else "";
 
 // Define the TestConnection function
 TestConnection = (dataSourcePath) =>

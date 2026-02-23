@@ -724,16 +724,14 @@ ACC_BIM360_Docs.OpenWebLink = (optional link as nullable text) =>
 
 // Validate required parameters function
 ACC_BIM360_Docs.ValidateRequired = (params as list, paramNames as list) as text =>
-            let
-                missing = List.Transform(
-                    List.Positions(List.Transform(params, each _ = null or _ = "")),
-                    each paramNames{_}
-                ),
-                missingFiltered = List.Select(missing, each _ <> null)
-            in
-                if List.Count(missingFiltered) > 0 
-                then "Missing required parameter(s): " & Text.Combine(missingFiltered, ", ")
-                else "";
+    let
+        pairs = List.Zip({params, paramNames}),
+        missing = List.Select(pairs, each _{0} = null or _{0} = ""),
+        missingNames = List.Transform(missing, each _{1})
+    in
+        if List.Count(missingNames) > 0 
+        then "Missing required parameter(s): " & Text.Combine(missingNames, ", ")
+        else "";
 
 // Define the TestConnection function
 TestConnection = (dataSourcePath) =>

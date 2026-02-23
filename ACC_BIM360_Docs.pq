@@ -507,7 +507,7 @@ ACC_BIM360_Docs.AllFiles = (projectId as text, folderId as text) =>
                     {"Name", "Key", "Data", "ItemKind", "ItemName", "IsLeaf"},
                     {
                         {"FileDetails", "fileDetails", ACC_BIM360_Docs.FileDetails("Tip", projectId, itemId), "View", "Table", true},
-                        {"FileContents", "fileContents", ACC_BIM360_Docs.FileContents(bucketKey, objectId, fileType), "Sheet", "Table", true}
+                        {"FileContents", "fileContents", ACC_BIM360_Docs.FileContentsBinary(bucketKey, objectId, null), "Binary", "Binary", true}
                     }
                 ),
                 navTable = Table.ToNavigationTable(objects, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
@@ -555,6 +555,26 @@ ACC_BIM360_Docs.FileContents = (optional bucketKey as nullable text, optional ob
         contents = try Excel.Workbook(source) otherwise try Csv.Document(source, [Delimiter = ",", Encoding = 1252, QuoteStyle = QuoteStyle.None]) otherwise source
     in
         contents;
+
+// Function to get raw binary file contents (no parsing)
+ACC_BIM360_Docs.FileContentsBinary = (optional bucketKey as nullable text, optional objectKey as nullable text, optional fileTipLink as nullable text) =>
+    let
+        // If fileTipLink provided, extract bucket/object keys from it
+        fileDetails = if fileTipLink <> null then Json.Document(Web.Contents(fileTipLink)) else null,
+        fileDetails_versionData = if fileTipLink <> null then try fileDetails[data]{0} otherwise try fileDetails[data] otherwise null else null,
+        fileDetails_storageData = if fileTipLink <> null then fileDetails_versionData[relationships][storage][data] else null,
+        fileDetails_bucketKey = if fileTipLink <> null then Text.Middle(Text.Split(fileDetails_storageData[id], ":"){3}, 0, Text.PositionOf(Text.Split(fileDetails_storageData[id], ":"){3}, "/")) else null,
+        fileDetails_objectKey = if fileTipLink <> null then Text.AfterDelimiter(fileDetails_storageData[id], "/") else null,
+
+        // Use fileTipLink-derived keys if available, otherwise use direct parameters
+        finalBucketKey = if fileTipLink <> null then fileDetails_bucketKey else bucketKey,
+        finalObjectKey = if fileTipLink <> null then fileDetails_objectKey else objectKey,
+
+        // Construct the URL and fetch raw binary
+        url = "https://developer.api.autodesk.com/oss/v2/buckets/" & finalBucketKey & "/objects/" & finalObjectKey,
+        source = Web.Contents(url)
+    in
+        source;
 
 // Function to get file details
 ACC_BIM360_Docs.FileDetails = (methodType as text, optional projectId as nullable text, optional itemId as nullable text, optional url as nullable text, optional version as nullable text) =>
